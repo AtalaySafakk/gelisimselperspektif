@@ -1,0 +1,1066 @@
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum CourseStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum CourseDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum LessonType {
+  VIDEO
+  LIVE
+  DOCUMENT
+}
+
+enum VideoProviderType {
+  MANUAL
+  R2
+  BUNNY
+  MUX
+}
+
+enum LivePlatform {
+  ZOOM
+  TEAMS
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  AWAITING_APPROVAL
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+enum PaymentProviderType {
+  MANUAL
+  IYZICO
+  PAYTR
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CREDIT_CARD
+  OTHER
+}
+
+enum CourseAccessStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum CommissionScope {
+  GLOBAL
+  INSTRUCTOR
+  COURSE
+}
+
+enum WalletTransactionType {
+  SALE_CREDIT
+  PAYOUT_DEBIT
+  REFUND_DEBIT
+  ADJUSTMENT
+}
+
+enum WalletBalanceType {
+  AVAILABLE
+  PENDING
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Katalog: eğitim satın alma / erişim uygunluk etiketi (System Role değil)
+/// Örn. USTA, KALFA — kullanıcı STUDENT kalır, ek olarak UserAccessRole ile yetkilendirilir.
+enum AccessRoleApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CourseDeliveryMode {
+  ONLINE
+  OFFLINE
+}
+
+/// Gerekli AccessRole koşulu: hepsi mi, yoksa en az biri mi yeterli?
+enum CourseAccessRequirementMode {
+  ALL
+  ANY
+}
+
+/// OPEN: doğrudan satın alma; APPLICATION: başvuru + admin onayı + kişisel ödeme linki
+enum CourseEnrollmentMode {
+  OPEN
+  APPLICATION
+}
+
+enum CourseEnrollmentApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  ORDER_APPROVED
+  ORDER_REJECTED
+  PAYMENT_RECEIVED
+  COURSE_PUBLISHED
+  LIVE_REMINDER
+  CERTIFICATE_READY
+  PAYOUT_APPROVED
+  PAYOUT_REJECTED
+  SYSTEM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum Currency {
+  TRY
+  USD
+  EUR
+}
+
+enum AuditAction {
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
+  COURSE_CREATED
+  COURSE_UPDATED
+  COURSE_SUBMITTED_FOR_REVIEW
+  COURSE_PUBLISHED
+  COURSE_REJECTED
+  COURSE_ARCHIVED
+  MODULE_CREATED
+  LESSON_CREATED
+  PAYOUT_APPROVED
+  PAYOUT_PAID
+  PAYOUT_REJECTED
+  USER_ROLE_CHANGED
+  COURSE_ACCESS_GRANTED
+  COURSE_ACCESS_REVOKED
+  WALLET_CREDITED
+  USER_REGISTERED
+  EMAIL_VERIFIED
+  PASSWORD_RESET_COMPLETED
+  USER_LOGGED_OUT
+  REFRESH_TOKEN_REUSE_DETECTED
+  LIVE_SESSION_CREATED
+  LIVE_SESSION_UPDATED
+  LIVE_SESSION_DELETED
+  ACCESS_ROLE_APPLICATION_APPROVED
+  ACCESS_ROLE_APPLICATION_REJECTED
+  ACCESS_ROLE_GRANTED_MANUAL
+  ACCESS_ROLE_REVOKED
+  COURSE_ENROLLMENT_APPLICATION_APPROVED
+  COURSE_ENROLLMENT_APPLICATION_REJECTED
+  PAYMENT_INVITE_ISSUED
+}
+
+enum AuditEntityType {
+  PAYMENT
+  ORDER
+  COURSE
+  INSTRUCTOR_PAYOUT
+  USER
+  COURSE_ACCESS
+  /// AccessRoleApplication.id
+  ACCESS_ROLE_APPLICATION
+  /// CourseEnrollmentApplication.id
+  COURSE_ENROLLMENT_APPLICATION
+}
+
+// =============================================================================
+// AUTH & USER
+// =============================================================================
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  role            Role      @default(STUDENT)
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  isActive        Boolean   @default(true)
+  lastLoginAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  profile            Profile?
+  instructorProfile  InstructorProfile?
+  refreshTokens      RefreshToken[]
+  authTokens         AuthToken[]
+  walletBalance      WalletBalance?
+  walletTransactions WalletTransaction[] @relation("WalletTransactionUser")
+  coursesInstructed  Course[]              @relation("CourseInstructor")
+  orders             Order[]               @relation("OrderStudent")
+  ordersAsInstructor Order[]               @relation("OrderInstructor")
+  courseAccesses     CourseAccess[]
+  lessonProgress     LessonProgress[]
+  certificates       Certificate[]
+  reviews            Review[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]            @relation("AuditActor")
+  payouts            InstructorPayout[]    @relation("PayoutInstructor")
+  payoutsProcessed   InstructorPayout[]    @relation("PayoutProcessor")
+  paymentsReviewed   Payment[]             @relation("PaymentReviewer")
+  commissionRules    CommissionRule[]      @relation("CommissionRuleInstructor")
+  userAccessRoles       UserAccessRole[]
+  accessRoleApplicationsSubmitted  AccessRoleApplication[] @relation("AccessRoleApplicationApplicant")
+  accessRoleApplicationsReviewed    AccessRoleApplication[] @relation("AccessRoleApplicationReviewer")
+  courseEnrollmentApplicationsSubmitted CourseEnrollmentApplication[] @relation("CourseEnrollmentApplicationApplicant")
+  courseEnrollmentApplicationsReviewed  CourseEnrollmentApplication[] @relation("CourseEnrollmentApplicationReviewer")
+  userAccessRolesGranted            UserAccessRole[]       @relation("UserAccessRoleGrantApprover")
+
+  @@index([role])
+  @@index([emailVerified])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Profile {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  firstName         String
+  lastName          String
+  displayName       String?
+  avatarStorageKey  String?
+  phone             String?
+  bio               String?   @db.Text
+  timezone          String    @default("Europe/Istanbul")
+  locale            String    @default("tr")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model InstructorProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  headline        String?
+  credentials     String?  @db.Text
+  specialization  String?
+  website         String?
+  linkedInUrl     String?
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isVerified])
+  @@map("instructor_profiles")
+}
+
+/// Ham refresh token asla saklanmaz — yalnızca SHA-256 hash (tokenHash).
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  familyId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  ipAddress  String?   @db.VarChar(45)
+  userAgent  String?   @db.Text
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("auth_tokens")
+}
+
+// =============================================================================
+// COURSE CATALOG
+// =============================================================================
+
+model CourseCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses Course[]
+
+  @@index([isActive, sortOrder])
+  @@map("course_categories")
+}
+
+model Course {
+  id                   String             @id @default(cuid())
+  instructorId         String
+  categoryId           String?
+  title                String
+  slug                 String             @unique
+  description          String             @db.Text
+  shortDescription     String?            @db.VarChar(500)
+  thumbnailStorageKey  String?
+  introVideoStorageKey String?
+  introVideoProvider   VideoProviderType?
+  price                Decimal            @db.Decimal(12, 2)
+  discountPrice        Decimal?           @db.Decimal(12, 2)
+  currency             Currency           @default(TRY)
+  difficulty           CourseDifficulty   @default(BEGINNER)
+  /// OFFLINE: video/PDF/quiz müfredatı. ONLINE: ödeme sonrası canlı oturum bilgileri (OnlineCourseSession).
+  deliveryMode            CourseDeliveryMode            @default(OFFLINE)
+  /// requiredAccessRoles için: hepsi gerekli mi, yoksa biri yeterli mi (ör. USTA veya TEKNIK_PERSONEL).
+  accessRequirementMode   CourseAccessRequirementMode   @default(ALL)
+  /// OPEN: katalog satın alma; APPLICATION: başvuru + kişisel ödeme daveti
+  enrollmentMode          CourseEnrollmentMode          @default(OPEN)
+  tags                 String[]           @default([])
+  status               CourseStatus       @default(DRAFT)
+  rejectionReason      String?            @db.Text
+  publishedAt          DateTime?
+  metaTitle            String?
+  metaDescription      String?            @db.VarChar(320)
+  deletedAt            DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  instructor              User                       @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  category                CourseCategory?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  modules                 Module[]
+  orders                  Order[]
+  courseAccesses          CourseAccess[]
+  reviews                 Review[]
+  certificates            Certificate[]
+  couponCourses           CouponCourse[]
+  commissionRules         CommissionRule[]           @relation("CommissionRuleCourse")
+  requiredAccessRoles     CourseRequiredAccessRole[]
+  enrollmentApplications  CourseEnrollmentApplication[]
+  onlineSessions          OnlineCourseSession[]
+
+  @@index([instructorId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([deletedAt])
+  @@index([status, publishedAt])
+  @@map("courses")
+}
+
+model Module {
+  id        String    @id @default(cuid())
+  courseId  String
+  title     String
+  order     Int       @default(0) @map("sort_order")
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@unique([courseId, order])
+  @@index([deletedAt])
+  @@map("modules")
+}
+
+/// Polymorphic içerik: lessonType + ilişkili Video | LiveSession | DocumentAsset (1:1)
+model Lesson {
+  id              String     @id @default(cuid())
+  moduleId        String
+  title           String
+  description     String?    @db.Text
+  lessonType      LessonType
+  order           Int        @default(0) @map("sort_order")
+  isFreePreview   Boolean    @default(false)
+  durationMinutes Int?
+  deletedAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  module         Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  video          Video?
+  liveSession    LiveSession?
+  document       DocumentAsset?
+  lessonProgress LessonProgress[]
+
+  @@unique([moduleId, order])
+  @@index([lessonType])
+  @@index([deletedAt])
+  @@map("lessons")
+}
+
+model Video {
+  id              String            @id @default(cuid())
+  lessonId        String            @unique
+  provider        VideoProviderType @default(R2)
+  storageKey      String?
+  externalId      String?
+  durationSeconds Int?
+  mimeType        String?
+  fileSizeBytes   BigInt?
+  width           Int?
+  height          Int?
+  deletedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([provider])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("videos")
+}
+
+model LiveSession {
+  id                        String       @id @default(cuid())
+  lessonId                  String       @unique
+  platform                  LivePlatform
+  title                     String
+  description               String?      @db.Text
+  meetingUrl                String
+  meetingPasswordEncrypted  String?
+  startsAt                  DateTime
+  joinAvailableAt           DateTime
+  durationMinutes           Int
+  timezone                  String       @default("Europe/Istanbul")
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([startsAt])
+  @@index([joinAvailableAt])
+  @@map("live_sessions")
+}
+
+model DocumentAsset {
+  id            String   @id @default(cuid())
+  lessonId      String   @unique
+  storageKey    String
+  fileName      String
+  mimeType      String   @default("application/pdf")
+  fileSizeBytes BigInt?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("document_assets")
+}
+
+model LessonProgress {
+  id              String    @id @default(cuid())
+  userId          String
+  lessonId        String
+  watchedSeconds  Int       @default(0)
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+  lastWatchedAt   DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+  @@map("lesson_progress")
+}
+
+// =============================================================================
+// ACCESS ROLES (uygunluk / eğitim satın alma — System Role değildir)
+// =============================================================================
+
+model AccessRole {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userGrants         UserAccessRole[]
+  courseRequirements CourseRequiredAccessRole[]
+  applications       AccessRoleApplication[]
+}
+
+model UserAccessRole {
+  id           String   @id @default(cuid())
+  userId       String
+  accessRoleId String
+  approvedById String?
+  approvedAt   DateTime @default(now())
+  /// Yalnızca admin manuel atamada; başvuru onayında null.
+  manualGrantNote String? @db.Text
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessRole AccessRole @relation(fields: [accessRoleId], references: [id], onDelete: Cascade)
+  approvedBy User?      @relation("UserAccessRoleGrantApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, accessRoleId])
+  @@index([accessRoleId])
+  @@map("user_access_roles")
+}
+
+model AccessRoleApplication {
+  id           String                      @id @default(cuid())
+  userId       String
+  accessRoleId String
+  status       AccessRoleApplicationStatus @default(PENDING)
+  /// Başvuran notu
+  note         String?                     @db.Text
+  /// Admin görüşü / red gerekçesi
+  reviewNote   String?                     @db.Text
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+
+  user       User                              @relation("AccessRoleApplicationApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  accessRole AccessRole                        @relation(fields: [accessRoleId], references: [id], onDelete: Restrict)
+  reviewedBy User?                             @relation("AccessRoleApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents  AccessRoleApplicationDocument[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("access_role_applications")
+}
+
+model AccessRoleApplicationDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  storageKey    String
+  fileName      String
+  mimeType      String   @default("application/pdf")
+  fileSizeBytes BigInt?
+  createdAt     DateTime @default(now())
+
+  application AccessRoleApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("access_role_application_documents")
+}
+
+model CourseEnrollmentApplication {
+  id           String                            @id @default(cuid())
+  courseId     String
+  userId       String
+  status       CourseEnrollmentApplicationStatus @default(PENDING)
+  note         String?                           @db.Text
+  reviewNote   String?                           @db.Text
+  reviewedById String?
+  reviewedAt   DateTime?
+  orderId      String?                           @unique
+  createdAt    DateTime                          @default(now())
+  updatedAt    DateTime                          @updatedAt
+
+  course     Course                                @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user       User                                  @relation("CourseEnrollmentApplicationApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?                                 @relation("CourseEnrollmentApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  order      Order?                                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  documents  CourseEnrollmentApplicationDocument[]
+
+  @@index([courseId, status])
+  @@index([userId, status])
+  @@map("course_enrollment_applications")
+}
+
+model CourseEnrollmentApplicationDocument {
+  id            String   @id @default(cuid())
+  applicationId String
+  storageKey    String
+  fileName      String
+  mimeType      String   @default("application/pdf")
+  fileSizeBytes BigInt?
+  createdAt     DateTime @default(now())
+
+  application CourseEnrollmentApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("course_enrollment_application_documents")
+}
+
+model CourseRequiredAccessRole {
+  courseId       String
+  accessRoleId   String
+
+  course     Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  accessRole AccessRole @relation(fields: [accessRoleId], references: [id], onDelete: Restrict)
+
+  @@id([courseId, accessRoleId])
+  @@map("course_required_access_roles")
+}
+
+/// Kurs düzeyinde canlı oturum (ONLINE deliveryMode). Ödeme / kayıt sonrası öğrenciye gösterilir.
+model OnlineCourseSession {
+  id                       String       @id @default(cuid())
+  courseId                 String
+  title                    String
+  description              String?      @db.Text
+  /// false: taslak — öğrenci linki görmez. true: yayında.
+  isPublished              Boolean      @default(false)
+  platform                 LivePlatform @default(ZOOM)
+  meetingUrl               String
+  meetingPasswordEncrypted String?
+  startsAt                 DateTime
+  durationMinutes          Int          @default(60)
+  timezone                 String       @default("Europe/Istanbul")
+  participantNotes         String?      @db.Text
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([courseId, startsAt])
+  @@map("online_course_sessions")
+}
+
+// =============================================================================
+// COMMERCE
+// =============================================================================
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique @default(cuid())
+  studentId      String
+  courseId       String
+  instructorId   String
+  status         OrderStatus @default(PENDING)
+  subtotal       Decimal     @db.Decimal(12, 2)
+  discountAmount Decimal     @default(0) @db.Decimal(12, 2)
+  total          Decimal     @db.Decimal(12, 2)
+  currency       Currency    @default(TRY)
+  couponId       String?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  refundedAt     DateTime?
+  notes          String?     @db.Text
+  /// Kişisel ödeme daveti (APPLICATION kursları)
+  paymentInviteToken      String? @unique
+  paymentInviteExpiresAt  DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  student    User                    @relation("OrderStudent", fields: [studentId], references: [id], onDelete: Restrict)
+  instructor User                    @relation("OrderInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  course     Course                  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  coupon     Coupon?                 @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  payments   Payment[]
+  access     CourseAccess?
+  commission OrderCommissionSnapshot?
+  walletTx   WalletTransaction[]
+  enrollmentApplication CourseEnrollmentApplication?
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([instructorId])
+  @@index([status])
+  @@index([paidAt])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+/// Manuel ödeme: öğrenci dekontu R2'ye yükler → receiptStorageKey + UNDER_REVIEW.
+model Payment {
+  id                 String              @id @default(cuid())
+  orderId            String
+  provider           PaymentProviderType @default(MANUAL)
+  method             PaymentMethod       @default(BANK_TRANSFER)
+  status             PaymentStatus       @default(PENDING)
+  amount             Decimal             @db.Decimal(12, 2)
+  currency           Currency            @default(TRY)
+  /// R2 key: receipts/{orderId}/{filename}
+  receiptStorageKey  String?
+  receiptUploadedAt  DateTime?
+  externalId         String?
+  externalPayload    Json?
+  rejectionReason    String?             @db.Text
+  reviewedById       String?
+  reviewedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  order      Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reviewedBy User?  @relation("PaymentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([provider])
+  @@index([externalId])
+  @@index([receiptStorageKey])
+  @@map("payments")
+}
+
+model CourseAccess {
+  id         String             @id @default(cuid())
+  userId     String
+  courseId   String
+  orderId    String             @unique
+  status     CourseAccessStatus @default(ACTIVE)
+  grantedAt  DateTime           @default(now())
+  revokedAt  DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, courseId])
+  @@index([userId, status])
+  @@index([courseId])
+  @@index([status])
+  @@map("course_access")
+}
+
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  type        CouponType
+  value       Decimal    @db.Decimal(12, 2)
+  maxUses     Int?
+  usedCount   Int        @default(0)
+  minOrderAmount Decimal? @db.Decimal(12, 2)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  orders  Order[]
+  courses CouponCourse[]
+
+  @@index([isActive])
+  @@index([startsAt, endsAt])
+  @@map("coupons")
+}
+
+model CouponCourse {
+  couponId String
+  courseId String
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, courseId])
+  @@map("coupon_courses")
+}
+
+// =============================================================================
+// COMMISSION & WALLET
+// =============================================================================
+
+model CommissionRule {
+  id            String          @id @default(cuid())
+  scope         CommissionScope
+  instructorId  String?
+  courseId      String?
+  percent       Decimal         @db.Decimal(5, 2)
+  effectiveFrom DateTime        @default(now())
+  effectiveTo   DateTime?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  instructor User?   @relation("CommissionRuleInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  course     Course? @relation("CommissionRuleCourse", fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([scope, isActive])
+  @@index([instructorId])
+  @@index([courseId])
+  @@index([effectiveFrom])
+  @@map("commission_rules")
+}
+
+model OrderCommissionSnapshot {
+  id                   String   @id @default(cuid())
+  orderId              String   @unique
+  grossAmount          Decimal  @db.Decimal(12, 2)
+  platformFeePercent   Decimal  @db.Decimal(5, 2)
+  platformFeeAmount    Decimal  @db.Decimal(12, 2)
+  instructorNetAmount  Decimal  @db.Decimal(12, 2)
+  currency             Currency @default(TRY)
+  commissionRuleId     String?
+  createdAt            DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@map("order_commission_snapshots")
+}
+
+model WalletBalance {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  availableBalance  Decimal  @default(0) @db.Decimal(14, 2)
+  pendingBalance    Decimal  @default(0) @db.Decimal(14, 2)
+  totalEarned       Decimal  @default(0) @db.Decimal(14, 2)
+  totalWithdrawn    Decimal  @default(0) @db.Decimal(14, 2)
+  currency          Currency @default(TRY)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallet_balances")
+}
+
+/// Append-only ledger — güncelleme/silme yasak (WalletTransactionRepository).
+model WalletTransaction {
+  id              String                @id @default(cuid())
+  walletBalanceId String
+  userId          String
+  type            WalletTransactionType
+  amount          Decimal               @db.Decimal(14, 2)
+  balanceType     WalletBalanceType
+  balanceAfter    Decimal               @db.Decimal(14, 2)
+  orderId         String?
+  payoutId        String?
+  note            String?               @db.Text
+  metadata        Json?
+  createdAt       DateTime              @default(now())
+
+  walletBalance WalletBalance     @relation(fields: [walletBalanceId], references: [id], onDelete: Cascade)
+  user          User              @relation("WalletTransactionUser", fields: [userId], references: [id], onDelete: Restrict)
+  order         Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  payout        InstructorPayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([walletBalanceId])
+  @@index([userId])
+  @@index([type])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}
+
+model InstructorPayout {
+  id              String       @id @default(cuid())
+  instructorId    String
+  amount          Decimal      @db.Decimal(12, 2)
+  currency        Currency     @default(TRY)
+  status          PayoutStatus @default(PENDING)
+  bankDetails     Json
+  rejectionReason String?      @db.Text
+  processedById   String?
+  processedAt     DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  instructor   User                @relation("PayoutInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  processedBy  User?               @relation("PayoutProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+  transactions WalletTransaction[]
+
+  @@index([instructorId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("instructor_payouts")
+}
+
+// =============================================================================
+// ENGAGEMENT
+// =============================================================================
+
+model Certificate {
+  id                String   @id @default(cuid())
+  userId            String
+  courseId          String
+  certificateNumber String   @unique
+  pdfStorageKey     String?
+  issuedAt          DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, courseId])
+  @@index([certificateNumber])
+  @@map("certificates")
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  userId    String
+  courseId  String
+  rating    Int
+  comment   String?      @db.Text
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId, status])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  type      NotificationType
+  channel   NotificationChannel @default(IN_APP)
+  title     String
+  body      String              @db.Text
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("system_settings")
+}
+
+// =============================================================================
+// MARKETING
+// =============================================================================
+
+enum HeroSlideTone {
+  EMERALD
+  SLATE
+  WARM
+}
+
+model HeroSlide {
+  id              String         @id @default(cuid())
+  eyebrow         String?        @db.VarChar(200)
+  title           String         @db.VarChar(300)
+  description     String?        @db.Text
+  primaryLabel    String?        @db.VarChar(120)
+  primaryHref     String?        @db.VarChar(500)
+  secondaryLabel  String?        @db.VarChar(120)
+  secondaryHref   String?        @db.VarChar(500)
+  imageStorageKey String?        @db.VarChar(500)
+  tone            HeroSlideTone  @default(EMERALD)
+  sortOrder       Int            @default(0)
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("hero_slides")
+}
+
+// =============================================================================
+// AUDIT
+// =============================================================================
+
+/// actorId null = sistem/cron/webhook kaynaklı aksiyon.
+model AuditLog {
+  id         String          @id @default(cuid())
+  actorId    String?
+  action     AuditAction
+  entityType AuditEntityType
+  entityId   String
+  metadata   Json?
+  ipAddress  String?         @db.VarChar(45)
+  userAgent  String?         @db.Text
+  createdAt  DateTime        @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
