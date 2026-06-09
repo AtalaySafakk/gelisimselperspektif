@@ -1,27 +1,38 @@
 /**
- * Plesk Node.js entry point — starts Next.js production server.
- * Application startup file in Plesk: app.js
+ * Plesk + Phusion Passenger entry point for Next.js.
+ * Startup file in Plesk Node.js panel: app.js
+ *
+ * Passenger spawn() ile başlatılan child process kabul etmez — HTTP server export/listen gerekir.
  */
-const { spawn } = require("child_process");
-const path = require("path");
+const { createServer } = require("http");
+const { parse } = require("url");
+const next = require("next");
 
-const port = process.env.PORT || 3000;
-const hostname = process.env.HOSTNAME || "0.0.0.0";
-const nextBin = path.join(__dirname, "node_modules", "next", "dist", "bin", "next");
+const nextApp = next({ dev: false, dir: __dirname });
+const handle = nextApp.getRequestHandler();
 
-console.log(`[app.js] Starting Next.js on ${hostname}:${port}`);
+nextApp
+  .prepare()
+  .then(() => {
+    const server = createServer((req, res) => {
+      const parsedUrl = parse(req.url, true);
+      handle(req, res, parsedUrl);
+    });
 
-const child = spawn(
-  process.execPath,
-  [nextBin, "start", "-H", hostname, "-p", String(port)],
-  {
-    stdio: "inherit",
-    env: process.env,
-    cwd: __dirname,
-  },
-);
+    // Plesk Phusion Passenger
+    if (typeof PhusionPassenger !== "undefined") {
+      server.listen("passenger");
+      console.log("[app.js] Next.js ready (Phusion Passenger)");
+      return;
+    }
 
-child.on("exit", (code) => {
-  console.error(`[app.js] Next.js exited with code ${code ?? "unknown"}`);
-  process.exit(code ?? 1);
-});
+    const port = process.env.PORT || 3000;
+    const hostname = process.env.HOSTNAME || "0.0.0.0";
+    server.listen(port, hostname, () => {
+      console.log(`[app.js] Next.js ready on http://${hostname}:${port}`);
+    });
+  })
+  .catch((err) => {
+    console.error("[app.js] Next.js failed to start:", err);
+    process.exit(1);
+  });
