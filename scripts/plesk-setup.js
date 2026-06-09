@@ -51,5 +51,6 @@ ${loaded ? "`.env` var ama DATABASE_URL satırı yok veya hatalı." : "`.env` do
 run("prisma generate", "npm run db:generate");
 run("prisma migrate deploy", "npm run migrate:deploy");
 run("next build", "npm run build");
+run("remove Plesk default index.html", "node scripts/plesk-fix-static.js");
 
 console.log("\n✅ plesk:setup tamam. Node.js uygulamasını Restart edin.\n");
