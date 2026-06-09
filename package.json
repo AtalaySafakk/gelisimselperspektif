@@ -9,7 +9,7 @@
     "postinstall": "prisma generate",
     "migrate:deploy": "prisma migrate deploy",
     "deploy": "npm run migrate:deploy && npm run build",
-    "plesk:setup": "prisma generate && npm run migrate:deploy && npm run build",
+    "plesk:setup": "node scripts/plesk-setup.js",
     "lint": "next lint",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
